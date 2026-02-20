@@ -1,5 +1,5 @@
 <p align="center">
-  <h1 align="center">🗺️ The Adventure</h1>
+  <h1 align="center"> The Adventure</h1>
   <p align="center"><strong>AI-Powered Choose-Your-Own-Adventure Story Game</strong></p>
   <p align="center">
     Generate unique, branching interactive stories on any theme — powered by GPT-4o-mini.
@@ -8,7 +8,7 @@
 
 ---
 
-## ✨ Overview
+## Overview
 
 **The Adventure** is a full-stack web application that uses AI to generate and play interactive, branching "choose-your-own-adventure" stories. Users enter a theme (e.g. *pirates*, *space*, *medieval*), and the app generates a complete story tree with multiple paths, choices, and endings — including both winning and losing outcomes.
 
@@ -16,7 +16,7 @@ Each story is a deeply nested decision tree where every choice leads to a differ
 
 ---
 
-## 🎮 How It Works
+## How It Works
 
 1. **Choose a Theme** — Enter any theme or scenario you can imagine.
 2. **AI Generates the Story** — The backend uses OpenAI's GPT-4o-mini via LangChain to generate a full branching narrative with 3–4 levels of depth.
@@ -25,7 +25,7 @@ Each story is a deeply nested decision tree where every choice leads to a differ
 
 ---
 
-## 🏗️ Architecture
+## Architecture
 
 The application follows a decoupled monorepo architecture with a **FastAPI** backend and a **React** frontend.
 
@@ -56,7 +56,7 @@ The-Adventure/
 
 ---
 
-## 🧠 Tech Stack
+## Tech Stack
 
 | Layer       | Technology                                                                 |
 | ----------- | -------------------------------------------------------------------------- |
@@ -68,7 +68,7 @@ The-Adventure/
 
 ---
 
-## 🔌 API Endpoints
+## API Endpoints
 
 All endpoints are prefixed with `/api`.
 
@@ -96,7 +96,7 @@ All endpoints are prefixed with `/api`.
 
 ---
 
-## 📐 Data Model
+## Data Model
 
 Stories are stored as a tree of nodes, enabling the branching narrative structure:
 
@@ -139,7 +139,7 @@ Each `StoryNode.options` is a JSON array of `{ text, node_id }` objects, forming
 
 ---
 
-## 🚀 Getting Started
+## Getting Started
 
 ### Prerequisites
 
@@ -215,7 +215,7 @@ The app will be available at [http://localhost:5173](http://localhost:5173). In 
 
 ---
 
-## ⚙️ Configuration
+## Configuration
 
 ### Environment Variables — Backend
 
@@ -247,7 +247,7 @@ When `DEBUG=False`, the backend constructs a PostgreSQL connection URL from thes
 
 ---
 
-## 🧩 Key Design Decisions
+## Key Design Decisions
 
 - **Async Job-Based Generation** — Story generation is offloaded to a background task. The frontend polls for job completion, keeping the UI responsive and avoiding HTTP timeouts during LLM calls.
 - **Tree Data Structure** — Stories are stored as flat `StoryNode` records linked via a JSON `options` field, enabling efficient database storage while preserving the tree traversal experience.
@@ -256,18 +256,18 @@ When `DEBUG=False`, the backend constructs a PostgreSQL connection URL from thes
 
 ---
 
-## 📦 Deployment
+## Deployment
 
 The project includes a [Choreo](https://wso2.com/choreo/) configuration (`.choreo/component.yaml`) for cloud deployment. The backend is exposed as a REST API on port `8000` with public and project-level network visibility, and connects to OpenAI via a managed connection reference.
 
 ---
 
-## 📄 License
+## License
 
 This project is provided as-is for educational and personal use.
 
 ---
 
 <p align="center">
-  <em>Built with ❤️ using FastAPI & React</em>
+  <em>Built using FastAPI & React</em>
 </p>
