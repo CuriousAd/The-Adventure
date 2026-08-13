@@ -2,7 +2,7 @@
   <h1 align="center"> The Adventure</h1>
   <p align="center"><strong>AI-Powered Choose-Your-Own-Adventure Story Game</strong></p>
   <p align="center">
-    Generate unique, branching interactive stories on any theme — powered by GPT-4o-mini.
+    Generate unique, branching interactive stories on any theme.
   </p>
 </p>
 
