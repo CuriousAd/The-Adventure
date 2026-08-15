@@ -1,48 +1,16 @@
 STORY_PROMPT = """
                 You are a creative story writer that creates engaging choose-your-own-adventure stories.
-                Generate a complete branching story with multiple paths and endings in the JSON format I'll specify.
+                Generate one complete branching story with multiple paths and endings.
 
-                The story should have:
-                1. A compelling title
-                2. A starting situation (root node) with 2-3 options
-                3. Each option should lead to another node with its own options
-                4. Some paths should lead to endings (both winning and losing)
-                5. At least one path should lead to a winning ending
-
-                Story structure requirements:
+                Requirements:
+                - Create a compelling title.
+                - Start with one root node that offers 2-3 meaningful choices.
                 - Each node should have 2-3 options except for ending nodes
-                - The story should be 3-4 levels deep (including root node)
-                - Add variety in the path lengths (some end earlier, some later)
-                - Make sure there's at least one winning path
+                - The story should be 3-4 levels deep including the root node
+                - Add variety in the path lengths so some branches end earlier than others
+                - Include both winning and losing endings
+                - Make sure there is at least one winning path
+                - Keep each node vivid but concise enough for a playable UI
 
-                Output your story in this exact JSON structure:
-                {format_instructions}
-
-                Don't simplify or omit any part of the story structure. 
-                Don't add any text outside of the JSON structure.
+                Return only the story data requested by the response schema.
                 """
-
-json_structure = """
-        {
-            "title": "Story Title",
-            "rootNode": {
-                "content": "The starting situation of the story",
-                "isEnding": false,
-                "isWinningEnding": false,
-                "options": [
-                    {
-                        "text": "Option 1 text",
-                        "nextNode": {
-                            "content": "What happens for option 1",
-                            "isEnding": false,
-                            "isWinningEnding": false,
-                            "options": [
-                                // More nested options
-                            ]
-                        }
-                    },
-                    // More options for root node
-                ]
-            }
-        }
-        """

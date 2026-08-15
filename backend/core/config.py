@@ -11,7 +11,9 @@ class Settings(BaseSettings):
 
     ALLOWED_ORIGINS: str = ""
 
-    OPENAI_API_KEY: str
+    GEMINI_API_KEY: Optional[str] = None
+    GOOGLE_API_KEY: Optional[str] = None
+    GEMINI_MODEL: str = "gemini-3.1-flash-lite"
 
     def __init__(self, **values):
         super().__init__(**values)
@@ -39,6 +41,9 @@ class Settings(BaseSettings):
                 )
             self.DATABASE_URL = f"postgresql://{db_user}:{db_password}@{db_host}:{db_port}/{db_name}"
 
+        if not self.gemini_api_key:
+            raise ValueError("Set GOOGLE_API_KEY or GEMINI_API_KEY for story generation.")
+
     @field_validator("DEBUG", mode="before")
     @classmethod
     def parse_debug(cls, v):
@@ -53,6 +58,10 @@ class Settings(BaseSettings):
             for origin in self.ALLOWED_ORIGINS.split(",")
             if origin.strip()
         ]
+
+    @property
+    def gemini_api_key(self) -> Optional[str]:
+        return self.GOOGLE_API_KEY or self.GEMINI_API_KEY
 
     class Config:
         env_file = ".env"

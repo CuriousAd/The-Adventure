@@ -19,7 +19,7 @@ Each story is a deeply nested decision tree where every choice leads to a differ
 ## How It Works
 
 1. **Choose a Theme** — Enter any theme or scenario you can imagine.
-2. **AI Generates the Story** — The backend uses OpenAI's GPT-4o-mini via LangChain to generate a full branching narrative with 3–4 levels of depth.
+2. **AI Generates the Story** — The backend uses Google's Gemini 3.1 Flash-Lite with medium reasoning to generate a full branching narrative with 3–4 levels of depth.
 3. **Play the Adventure** — Navigate through the story by choosing from 2–3 options at each decision point.
 4. **Reach an Ending** — Some paths lead to victory, others to defeat. Restart or generate a brand new story anytime.
 
@@ -62,7 +62,7 @@ The-Adventure/
 | ----------- | -------------------------------------------------------------------------- |
 | **Frontend** | React 19, Vite 7, React Router 7, Axios                                  |
 | **Backend**  | FastAPI, Uvicorn, Python 3.11+                                            |
-| **AI/LLM**   | LangChain, LangChain-OpenAI (GPT-4o-mini)                                |
+| **AI/LLM**   | Google Gen AI SDK, Gemini 3.1 Flash-Lite                                 |
 | **Database** | SQLAlchemy ORM — SQLite (dev) / PostgreSQL (prod)                         |
 | **Deployment** | [Choreo](https://wso2.com/choreo/) (PaaS)                              |
 
@@ -145,7 +145,7 @@ Each `StoryNode.options` is a JSON array of `{ text, node_id }` objects, forming
 
 - **Python 3.11+** and `pip` (or [`uv`](https://docs.astral.sh/uv/))
 - **Node.js 18+** and `npm`
-- An **OpenAI API key**
+- A **Gemini API key**
 
 ### 1. Clone the Repository
 
@@ -177,7 +177,7 @@ DATABASE_URL=sqlite:///./database.db
 API_PREFIX=/api
 DEBUG=True
 ALLOWED_ORIGINS=http://localhost:3000,http://localhost:5173
-OPENAI_API_KEY=sk-your-openai-api-key-here
+GEMINI_API_KEY=your-gemini-api-key-here
 ```
 
 Start the backend server:
@@ -225,7 +225,7 @@ The app will be available at [http://localhost:5173](http://localhost:5173). In 
 | `API_PREFIX`    | API route prefix                     | `/api`                     |
 | `DEBUG`         | Debug mode (uses SQLite when `True`) | `False`                    |
 | `ALLOWED_ORIGINS` | Comma-separated CORS origins       | `""`                       |
-| `OPENAI_API_KEY` | Your OpenAI API key                 | *required*                 |
+| `GEMINI_API_KEY` | Your Gemini API key                 | *required unless `GOOGLE_API_KEY` is set* |
 
 ### Environment Variables — Frontend
 
@@ -251,14 +251,14 @@ When `DEBUG=False`, the backend constructs a PostgreSQL connection URL from thes
 
 - **Async Job-Based Generation** — Story generation is offloaded to a background task. The frontend polls for job completion, keeping the UI responsive and avoiding HTTP timeouts during LLM calls.
 - **Tree Data Structure** — Stories are stored as flat `StoryNode` records linked via a JSON `options` field, enabling efficient database storage while preserving the tree traversal experience.
-- **Structured LLM Output** — LangChain's `PydanticOutputParser` enforces a strict JSON schema on GPT-4o-mini's output, ensuring reliable parsing of the branching story structure.
+- **Structured LLM Output** — Gemini structured responses are validated against a Pydantic schema before the branching story is persisted.
 - **Session-Based Identity** — Users are identified via session cookies (no authentication required), making the experience frictionless.
 
 ---
 
 ## Deployment
 
-The project includes a [Choreo](https://wso2.com/choreo/) configuration (`.choreo/component.yaml`) for cloud deployment. The backend is exposed as a REST API on port `8000` with public and project-level network visibility, and connects to OpenAI via a managed connection reference.
+The project includes a [Choreo](https://wso2.com/choreo/) configuration (`.choreo/component.yaml`) for cloud deployment. The backend is exposed as a REST API on port `8000` with public and project-level network visibility. If you deploy through Choreo, the existing managed OpenAI connection reference should be replaced with an equivalent Gemini/Google AI configuration.
 
 ---
 
