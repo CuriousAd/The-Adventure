@@ -9,7 +9,7 @@ The current backend architecture is intentionally simple:
 - FastAPI handles HTTP routing.
 - SQLAlchemy persists jobs, stories, and story nodes.
 - Gemini generates the entire story tree in a single structured response.
-- A background task isolates the long-running generation step from the request/response cycle.
+- Job execution can run either in-process background mode or inline mode, depending on deployment.
 
 ## 2. Core Backend Modules
 
@@ -103,24 +103,25 @@ That session ID becomes the lightweight identity for the player. There is no aut
 
 This is committed before story generation starts, which means the client immediately gets a durable handle it can poll.
 
-### Step 4: backend returns immediately
+### Step 4: backend chooses an execution mode
 
-The API returns the job object instead of waiting for Gemini. This avoids:
+There are now two execution modes:
 
-- request timeouts,
-- blocking the UI,
-- tying story generation latency to one HTTP request.
+- `background`: used in normal server-style deployments; the API returns immediately and FastAPI `BackgroundTasks` starts generation.
+- `inline`: used for AWS Lambda deployments; the backend creates the job first, then finishes generation in the same invocation before returning the final job state.
 
-### Step 5: background task starts generation
+The frontend contract stays the same in both modes because it still receives a job object and can still poll if needed.
 
-FastAPI `BackgroundTasks` triggers `generate_story_task(job_id, theme, session_id)`.
+### Step 5: story generation runs
+
+Generation is always handled by `generate_story_task(job_id, theme, session_id)`.
 
 Inside that function:
 
 1. a new DB session is opened with `SessionLocal()`,
 2. the job row is looked up by `job_id`,
 3. the job moves from `pending` to `processing`,
-4. Gemini is called,
+4. Gemini is called with retry support,
 5. the generated story is stored,
 6. the job is marked `completed` or `failed`.
 
@@ -296,9 +297,9 @@ That can leave jobs stuck in `processing`.
 
 Gemini must return the entire tree in one response. If the response is malformed or truncated, the whole generation fails.
 
-### 3. No ownership enforcement on reads
+### 3. Lambda execution changes latency characteristics
 
-The session ID is stored, but `GET /jobs/{job_id}` and `GET /stories/{story_id}/complete` do not currently verify that the requester owns that resource.
+Because Lambda cannot safely depend on post-response background execution, the Lambda deployment path uses inline generation. That keeps correctness, but it means `POST /stories/create` can complete only after generation finishes in that environment.
 
 ### 4. `options` uses JSON instead of relational edges
 
@@ -314,8 +315,7 @@ There is no explicit logging, token accounting, retry policy, or generation metr
 
 - Add provider-level error logging around Gemini responses.
 - Validate that returned trees have exactly one root and at least one winning ending before commit.
-- Enforce session ownership checks on job/story fetch endpoints.
-- Add retry handling for transient model failures.
+- Add stronger job-state telemetry beyond simple status strings.
 
 ### Mid-term
 

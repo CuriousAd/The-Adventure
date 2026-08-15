@@ -64,7 +64,7 @@ The-Adventure/
 | **Backend**  | FastAPI, Uvicorn, Python 3.11+                                            |
 | **AI/LLM**   | Google Gen AI SDK, Gemini 3.1 Flash-Lite                                 |
 | **Database** | SQLAlchemy ORM — SQLite (dev) / PostgreSQL (prod)                         |
-| **Deployment** | [Choreo](https://wso2.com/choreo/) (PaaS)                              |
+| **Deployment** | AWS Lambda (SAM)                                                       |
 
 ---
 
@@ -249,16 +249,21 @@ When `DEBUG=False`, the backend constructs a PostgreSQL connection URL from thes
 
 ## Key Design Decisions
 
-- **Async Job-Based Generation** — Story generation is offloaded to a background task. The frontend polls for job completion, keeping the UI responsive and avoiding HTTP timeouts during LLM calls.
+- **Job-Based Generation** — The frontend still works through a job contract. Local/server deployments use background execution, while AWS Lambda uses inline execution because Lambda does not reliably continue FastAPI background tasks after the response is returned.
 - **Tree Data Structure** — Stories are stored as flat `StoryNode` records linked via a JSON `options` field, enabling efficient database storage while preserving the tree traversal experience.
 - **Structured LLM Output** — Gemini structured responses are validated against a Pydantic schema before the branching story is persisted.
-- **Session-Based Identity** — Users are identified via session cookies (no authentication required), making the experience frictionless.
+- **Session-Based Identity** — Users are identified via session cookies, and job/story reads are scoped to the originating session.
 
 ---
 
 ## Deployment
 
-The project includes a [Choreo](https://wso2.com/choreo/) configuration (`.choreo/component.yaml`) for cloud deployment. The backend is exposed as a REST API on port `8000` with public and project-level network visibility. If you deploy through Choreo, the existing managed OpenAI connection reference should be replaced with an equivalent Gemini/Google AI configuration.
+The backend now includes an AWS SAM template at `backend/template.yaml` and a PowerShell deploy script at `backend/deploy.ps1` for AWS Lambda deployment.
+
+Important deployment note:
+
+- Lambda deployments run with `JOB_EXECUTION_MODE=inline` because the original FastAPI background-task pattern is not reliable once a Lambda response has been returned.
+- Use PostgreSQL for Lambda deployments by providing `DATABASE_URL`; SQLite should remain dev-only.
 
 ---
 

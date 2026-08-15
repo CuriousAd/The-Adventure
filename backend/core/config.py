@@ -14,6 +14,9 @@ class Settings(BaseSettings):
     GEMINI_API_KEY: Optional[str] = None
     GOOGLE_API_KEY: Optional[str] = None
     GEMINI_MODEL: str = "gemini-3.1-flash-lite"
+    JOB_EXECUTION_MODE: str = "background"
+    STORY_GENERATION_RETRIES: int = 2
+    STALE_JOB_TIMEOUT_SECONDS: int = 900
 
     def __init__(self, **values):
         super().__init__(**values)
@@ -62,6 +65,12 @@ class Settings(BaseSettings):
     @property
     def gemini_api_key(self) -> Optional[str]:
         return self.GOOGLE_API_KEY or self.GEMINI_API_KEY
+
+    @property
+    def job_execution_mode(self) -> str:
+        if self.JOB_EXECUTION_MODE == "background" and os.getenv("AWS_LAMBDA_FUNCTION_NAME"):
+            return "inline"
+        return self.JOB_EXECUTION_MODE
 
     class Config:
         env_file = ".env"

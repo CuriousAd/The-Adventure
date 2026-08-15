@@ -1,0 +1,59 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: The Adventure backend deployed on AWS Lambda with FastAPI and Gemini.
+
+Globals:
+  Function:
+    Runtime: python3.11
+    Timeout: 90
+    MemorySize: 1024
+    Architectures:
+      - x86_64
+
+Parameters:
+  GeminiApiKey:
+    Type: String
+    NoEcho: true
+    Description: Gemini API key for story generation.
+  DatabaseUrl:
+    Type: String
+    Description: Production database URL. Use PostgreSQL for Lambda deployments.
+  AllowedOrigins:
+    Type: String
+    Default: ""
+    Description: Comma-separated CORS origins.
+  ApiPrefix:
+    Type: String
+    Default: /api
+  DebugMode:
+    Type: String
+    Default: "False"
+    AllowedValues:
+      - "True"
+      - "False"
+  GeminiModel:
+    Type: String
+    Default: gemini-3.1-flash-lite
+
+Resources:
+  AdventureApiFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: .
+      Handler: lambda_handler.handler
+      Environment:
+        Variables:
+          GOOGLE_API_KEY: !Ref GeminiApiKey
+          DATABASE_URL: !Ref DatabaseUrl
+          ALLOWED_ORIGINS: !Ref AllowedOrigins
+          API_PREFIX: !Ref ApiPrefix
+          DEBUG: !Ref DebugMode
+          GEMINI_MODEL: !Ref GeminiModel
+          JOB_EXECUTION_MODE: inline
+      FunctionUrlConfig:
+        AuthType: NONE
+
+Outputs:
+  AdventureApiUrl:
+    Description: Public Function URL for the backend API.
+    Value: !GetAtt AdventureApiFunctionUrl.FunctionUrl

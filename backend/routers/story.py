@@ -1,9 +1,10 @@
 import uuid
 from typing import Optional
-from datetime import datetime
+from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException, Cookie, Response, BackgroundTasks
 from sqlalchemy.orm import Session
 
+from core.config import settings
 from db.database import get_db, SessionLocal
 from models.story import Story, StoryNode
 from models.job import StoryJob
@@ -21,6 +22,12 @@ router = APIRouter(
 def get_session_id(session_id: Optional[str] = Cookie(None)):
     if not session_id:
         session_id = str(uuid.uuid4())
+    return session_id
+
+
+def require_session_id(session_id: Optional[str] = Cookie(None)) -> str:
+    if not session_id:
+        raise HTTPException(status_code=401, detail="Session not found")
     return session_id
 
 
@@ -44,13 +51,22 @@ def create_story(
     )
     db.add(job)
     db.commit()
+    db.refresh(job)
 
-    background_tasks.add_task(
-        generate_story_task,
-        job_id=job_id,
-        theme=request.theme,
-        session_id=session_id
-    )
+    if settings.job_execution_mode == "inline":
+        generate_story_task(
+            job_id=job_id,
+            theme=request.theme,
+            session_id=session_id
+        )
+        db.refresh(job)
+    else:
+        background_tasks.add_task(
+            generate_story_task,
+            job_id=job_id,
+            theme=request.theme,
+            session_id=session_id
+        )
 
     return job
 
@@ -60,33 +76,55 @@ def generate_story_task(job_id: str, theme: str, session_id: str):
     db = SessionLocal()
 
     try:
-        job = db.query(StoryJob).filter(StoryJob.job_id == job_id).first()
+        job = db.query(StoryJob).filter(
+            StoryJob.job_id == job_id,
+            StoryJob.session_id == session_id
+        ).first()
 
         if not job:
             return
 
-        try:
-            job.status = "processing"
-            db.commit()
+        job.status = "processing"
+        job.error = None
+        db.commit()
 
-            story = StoryGenerator.generate_story(db, session_id, theme)
+        last_error = None
+        for attempt in range(1, settings.STORY_GENERATION_RETRIES + 2):
+            try:
+                story = StoryGenerator.generate_story(db, session_id, theme)
+                job.story_id = story.id
+                job.status = "completed"
+                job.completed_at = datetime.now(timezone.utc)
+                job.error = None
+                db.commit()
+                return
+            except Exception as e:
+                db.rollback()
+                last_error = str(e)
 
-            job.story_id = story.id  # todo: update story id
-            job.status = "completed"
-            job.completed_at = datetime.now()
-            db.commit()
-        except Exception as e:
+        job = db.query(StoryJob).filter(
+            StoryJob.job_id == job_id,
+            StoryJob.session_id == session_id
+        ).first()
+        if job:
             job.status = "failed"
-            job.completed_at = datetime.now()
-            job.error = str(e)
+            job.completed_at = datetime.now(timezone.utc)
+            job.error = f"Generation failed after {settings.STORY_GENERATION_RETRIES + 1} attempt(s): {last_error}"
             db.commit()
     finally:
         db.close()
 
 
 @router.get("/{story_id}/complete", response_model=CompleteStoryResponse)
-def get_complete_story(story_id: int, db: Session = Depends(get_db)):
-    story = db.query(Story).filter(Story.id == story_id).first()
+def get_complete_story(
+    story_id: int,
+    session_id: str = Depends(require_session_id),
+    db: Session = Depends(get_db)
+):
+    story = db.query(Story).filter(
+        Story.id == story_id,
+        Story.session_id == session_id
+    ).first()
     if not story:
         raise HTTPException(status_code=404, detail="Story not found")
 
