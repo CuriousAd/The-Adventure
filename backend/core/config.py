@@ -17,6 +17,8 @@ class Settings(BaseSettings):
     JOB_EXECUTION_MODE: str = "background"
     STORY_GENERATION_RETRIES: int = 2
     STALE_JOB_TIMEOUT_SECONDS: int = 900
+    STORY_JOB_QUEUE_URL: Optional[str] = None
+    AWS_REGION: Optional[str] = None
 
     def __init__(self, **values):
         super().__init__(**values)
@@ -69,7 +71,7 @@ class Settings(BaseSettings):
     @property
     def job_execution_mode(self) -> str:
         if self.JOB_EXECUTION_MODE == "background" and os.getenv("AWS_LAMBDA_FUNCTION_NAME"):
-            return "inline"
+            return "queue" if self.STORY_JOB_QUEUE_URL else "background"
         return self.JOB_EXECUTION_MODE
 
     class Config:

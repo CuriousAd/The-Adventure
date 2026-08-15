@@ -9,7 +9,7 @@ The current backend architecture is intentionally simple:
 - FastAPI handles HTTP routing.
 - SQLAlchemy persists jobs, stories, and story nodes.
 - Gemini generates the entire story tree in a single structured response.
-- Job execution can run either in-process background mode or inline mode, depending on deployment.
+- Job execution can run either in-process background mode or queued worker mode, depending on deployment.
 
 ## 2. Core Backend Modules
 
@@ -108,13 +108,16 @@ This is committed before story generation starts, which means the client immedia
 There are now two execution modes:
 
 - `background`: used in normal server-style deployments; the API returns immediately and FastAPI `BackgroundTasks` starts generation.
-- `inline`: used for AWS Lambda deployments; the backend creates the job first, then finishes generation in the same invocation before returning the final job state.
+- `queue`: used for AWS Lambda deployments; the API writes a job row and sends a message to SQS, and a dedicated worker Lambda consumes the queue.
 
 The frontend contract stays the same in both modes because it still receives a job object and can still poll if needed.
 
 ### Step 5: story generation runs
 
-Generation is always handled by `generate_story_task(job_id, theme, session_id)`.
+Generation is handled by a shared job runner:
+
+- local/server path: `generate_story_task(job_id, theme, session_id)`
+- AWS worker path: `worker_handler.py` receives SQS messages and calls the same underlying job runner
 
 Inside that function:
 
@@ -297,9 +300,14 @@ That can leave jobs stuck in `processing`.
 
 Gemini must return the entire tree in one response. If the response is malformed or truncated, the whole generation fails.
 
-### 3. Lambda execution changes latency characteristics
+### 3. Queue infrastructure is now part of correctness
 
-Because Lambda cannot safely depend on post-response background execution, the Lambda deployment path uses inline generation. That keeps correctness, but it means `POST /stories/create` can complete only after generation finishes in that environment.
+In AWS, successful asynchronous execution now depends on:
+
+- the API Lambda being able to publish to SQS,
+- the worker Lambda being subscribed to the queue,
+- queue visibility timeout and retry settings being sane,
+- the dead-letter queue being monitored.
 
 ### 4. `options` uses JSON instead of relational edges
 
@@ -319,10 +327,10 @@ There is no explicit logging, token accounting, retry policy, or generation metr
 
 ### Mid-term
 
-- Move job execution to a real queue worker model such as Celery, RQ, or Dramatiq.
 - Add `parent_node_id` or a separate edges table if story analytics become important.
 - Store raw model response JSON for debugging and replay.
 - Add story metadata such as depth, node count, ending count, and winning-path count.
+- Add queue metrics, DLQ alerts, and worker tracing for production operations.
 
 ### Frontend-facing backend enhancements
 

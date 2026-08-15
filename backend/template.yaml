@@ -36,11 +36,23 @@ Parameters:
     Default: gemini-3.1-flash-lite
 
 Resources:
+  StoryJobDeadLetterQueue:
+    Type: AWS::SQS::Queue
+  StoryJobQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      VisibilityTimeout: 1080
+      RedrivePolicy:
+        deadLetterTargetArn: !GetAtt StoryJobDeadLetterQueue.Arn
+        maxReceiveCount: 3
   AdventureApiFunction:
     Type: AWS::Serverless::Function
     Properties:
       CodeUri: .
       Handler: lambda_handler.handler
+      Policies:
+        - SQSSendMessagePolicy:
+            QueueName: !GetAtt StoryJobQueue.QueueName
       Environment:
         Variables:
           GOOGLE_API_KEY: !Ref GeminiApiKey
@@ -49,11 +61,44 @@ Resources:
           API_PREFIX: !Ref ApiPrefix
           DEBUG: !Ref DebugMode
           GEMINI_MODEL: !Ref GeminiModel
-          JOB_EXECUTION_MODE: inline
+          JOB_EXECUTION_MODE: queue
+          STORY_JOB_QUEUE_URL: !Ref StoryJobQueue
+          AWS_REGION: !Ref AWS::Region
       FunctionUrlConfig:
         AuthType: NONE
+  StoryWorkerFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: .
+      Handler: worker_handler.handler
+      Timeout: 180
+      Policies:
+        - SQSPollerPolicy:
+            QueueName: !GetAtt StoryJobQueue.QueueName
+      Environment:
+        Variables:
+          GOOGLE_API_KEY: !Ref GeminiApiKey
+          DATABASE_URL: !Ref DatabaseUrl
+          ALLOWED_ORIGINS: !Ref AllowedOrigins
+          API_PREFIX: !Ref ApiPrefix
+          DEBUG: !Ref DebugMode
+          GEMINI_MODEL: !Ref GeminiModel
+          JOB_EXECUTION_MODE: queue
+          STORY_JOB_QUEUE_URL: !Ref StoryJobQueue
+          AWS_REGION: !Ref AWS::Region
+      Events:
+        StoryJobQueueEvent:
+          Type: SQS
+          Properties:
+            Queue: !GetAtt StoryJobQueue.Arn
+            BatchSize: 10
+            FunctionResponseTypes:
+              - ReportBatchItemFailures
 
 Outputs:
   AdventureApiUrl:
     Description: Public Function URL for the backend API.
     Value: !GetAtt AdventureApiFunctionUrl.FunctionUrl
+  StoryJobQueueUrl:
+    Description: Queue URL for story jobs.
+    Value: !Ref StoryJobQueue

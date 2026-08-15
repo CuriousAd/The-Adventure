@@ -64,7 +64,7 @@ The-Adventure/
 | **Backend**  | FastAPI, Uvicorn, Python 3.11+                                            |
 | **AI/LLM**   | Google Gen AI SDK, Gemini 3.1 Flash-Lite                                 |
 | **Database** | SQLAlchemy ORM — SQLite (dev) / PostgreSQL (prod)                         |
-| **Deployment** | AWS Lambda (SAM)                                                       |
+| **Deployment** | AWS Lambda + SQS (SAM)                                                 |
 
 ---
 
@@ -249,7 +249,7 @@ When `DEBUG=False`, the backend constructs a PostgreSQL connection URL from thes
 
 ## Key Design Decisions
 
-- **Job-Based Generation** — The frontend still works through a job contract. Local/server deployments use background execution, while AWS Lambda uses inline execution because Lambda does not reliably continue FastAPI background tasks after the response is returned.
+- **Job-Based Generation** — The frontend works through a durable job contract. Local/server deployments can use in-process background execution, while AWS cloud deployment uses SQS plus a worker Lambda so story generation stays asynchronous without tying generation time to the request.
 - **Tree Data Structure** — Stories are stored as flat `StoryNode` records linked via a JSON `options` field, enabling efficient database storage while preserving the tree traversal experience.
 - **Structured LLM Output** — Gemini structured responses are validated against a Pydantic schema before the branching story is persisted.
 - **Session-Based Identity** — Users are identified via session cookies, and job/story reads are scoped to the originating session.
@@ -262,7 +262,8 @@ The backend now includes an AWS SAM template at `backend/template.yaml` and a Po
 
 Important deployment note:
 
-- Lambda deployments run with `JOB_EXECUTION_MODE=inline` because the original FastAPI background-task pattern is not reliable once a Lambda response has been returned.
+- AWS deployments run with `JOB_EXECUTION_MODE=queue`, where the API Lambda writes the job and pushes work to SQS, and a separate worker Lambda processes queued jobs.
+- The SAM stack provisions a main story-job queue plus a dead-letter queue for messages that exceed the retry limit.
 - Use PostgreSQL for Lambda deployments by providing `DATABASE_URL`; SQLite should remain dev-only.
 
 ---

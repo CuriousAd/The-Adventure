@@ -1,18 +1,17 @@
 import uuid
 from typing import Optional
-from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException, Cookie, Response, BackgroundTasks
 from sqlalchemy.orm import Session
 
 from core.config import settings
-from db.database import get_db, SessionLocal
+from core.job_runner import enqueue_story_job, run_story_job
+from db.database import get_db
 from models.story import Story, StoryNode
 from models.job import StoryJob
 from schemas.story import (
     CompleteStoryResponse, CompleteStoryNodeResponse, CreateStoryRequest
 )
 from schemas.job import StoryJobResponse
-from core.story_generator import StoryGenerator
 
 router = APIRouter(
     prefix="/stories",
@@ -53,13 +52,18 @@ def create_story(
     db.commit()
     db.refresh(job)
 
-    if settings.job_execution_mode == "inline":
-        generate_story_task(
-            job_id=job_id,
-            theme=request.theme,
-            session_id=session_id
-        )
-        db.refresh(job)
+    if settings.job_execution_mode == "queue":
+        try:
+            enqueue_story_job(
+                job_id=job_id,
+                theme=request.theme,
+                session_id=session_id
+            )
+        except Exception as e:
+            job.status = "failed"
+            job.error = f"Failed to enqueue story job: {e}"
+            db.commit()
+            raise HTTPException(status_code=500, detail="Failed to queue story generation job")
     else:
         background_tasks.add_task(
             generate_story_task,
@@ -73,46 +77,7 @@ def create_story(
 # add background tasks, generate story (the idea of asynchronous operations)
 
 def generate_story_task(job_id: str, theme: str, session_id: str):
-    db = SessionLocal()
-
-    try:
-        job = db.query(StoryJob).filter(
-            StoryJob.job_id == job_id,
-            StoryJob.session_id == session_id
-        ).first()
-
-        if not job:
-            return
-
-        job.status = "processing"
-        job.error = None
-        db.commit()
-
-        last_error = None
-        for attempt in range(1, settings.STORY_GENERATION_RETRIES + 2):
-            try:
-                story = StoryGenerator.generate_story(db, session_id, theme)
-                job.story_id = story.id
-                job.status = "completed"
-                job.completed_at = datetime.now(timezone.utc)
-                job.error = None
-                db.commit()
-                return
-            except Exception as e:
-                db.rollback()
-                last_error = str(e)
-
-        job = db.query(StoryJob).filter(
-            StoryJob.job_id == job_id,
-            StoryJob.session_id == session_id
-        ).first()
-        if job:
-            job.status = "failed"
-            job.completed_at = datetime.now(timezone.utc)
-            job.error = f"Generation failed after {settings.STORY_GENERATION_RETRIES + 1} attempt(s): {last_error}"
-            db.commit()
-    finally:
-        db.close()
+    run_story_job(job_id=job_id, theme=theme, session_id=session_id)
 
 
 @router.get("/{story_id}/complete", response_model=CompleteStoryResponse)
