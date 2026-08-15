@@ -11,10 +11,10 @@ Globals:
       - x86_64
 
 Parameters:
-  GeminiApiKey:
+  GeminiApiKeys:
     Type: String
     NoEcho: true
-    Description: Gemini API key for story generation.
+    Description: Comma-separated Gemini API keys for story generation.
   DatabaseUrl:
     Type: String
     Description: Production database URL. Use PostgreSQL for Lambda deployments.
@@ -36,69 +36,94 @@ Parameters:
     Default: gemini-3.1-flash-lite
 
 Resources:
-  StoryJobDeadLetterQueue:
-    Type: AWS::SQS::Queue
-  StoryJobQueue:
-    Type: AWS::SQS::Queue
-    Properties:
-      VisibilityTimeout: 1080
-      RedrivePolicy:
-        deadLetterTargetArn: !GetAtt StoryJobDeadLetterQueue.Arn
-        maxReceiveCount: 3
   AdventureApiFunction:
     Type: AWS::Serverless::Function
     Properties:
       CodeUri: .
       Handler: lambda_handler.handler
       Policies:
-        - SQSSendMessagePolicy:
-            QueueName: !GetAtt StoryJobQueue.QueueName
+        - Statement:
+            - Effect: Allow
+              Action:
+                - states:StartExecution
+              Resource: !Ref StoryWorkflowStateMachine
       Environment:
         Variables:
-          GOOGLE_API_KEY: !Ref GeminiApiKey
+          GEMINI_API_KEYS: !Ref GeminiApiKeys
           DATABASE_URL: !Ref DatabaseUrl
           ALLOWED_ORIGINS: !Ref AllowedOrigins
           API_PREFIX: !Ref ApiPrefix
           DEBUG: !Ref DebugMode
           GEMINI_MODEL: !Ref GeminiModel
-          JOB_EXECUTION_MODE: queue
-          STORY_JOB_QUEUE_URL: !Ref StoryJobQueue
+          JOB_EXECUTION_MODE: workflow
+          STORY_WORKFLOW_ARN: !Ref StoryWorkflowStateMachine
           AWS_REGION: !Ref AWS::Region
       FunctionUrlConfig:
         AuthType: NONE
-  StoryWorkerFunction:
+  StoryWorkflowFunction:
     Type: AWS::Serverless::Function
     Properties:
       CodeUri: .
-      Handler: worker_handler.handler
-      Timeout: 180
-      Policies:
-        - SQSPollerPolicy:
-            QueueName: !GetAtt StoryJobQueue.QueueName
+      Handler: workflow_handler.handler
+      Timeout: 120
       Environment:
         Variables:
-          GOOGLE_API_KEY: !Ref GeminiApiKey
+          GEMINI_API_KEYS: !Ref GeminiApiKeys
           DATABASE_URL: !Ref DatabaseUrl
           ALLOWED_ORIGINS: !Ref AllowedOrigins
           API_PREFIX: !Ref ApiPrefix
           DEBUG: !Ref DebugMode
           GEMINI_MODEL: !Ref GeminiModel
-          JOB_EXECUTION_MODE: queue
-          STORY_JOB_QUEUE_URL: !Ref StoryJobQueue
+          JOB_EXECUTION_MODE: workflow
+          STORY_WORKFLOW_ARN: !Ref StoryWorkflowStateMachine
           AWS_REGION: !Ref AWS::Region
-      Events:
-        StoryJobQueueEvent:
-          Type: SQS
-          Properties:
-            Queue: !GetAtt StoryJobQueue.Arn
-            BatchSize: 10
-            FunctionResponseTypes:
-              - ReportBatchItemFailures
+  StoryWorkflowStateMachine:
+    Type: AWS::Serverless::StateMachine
+    Properties:
+      Type: EXPRESS
+      Policies:
+        - LambdaInvokePolicy:
+            FunctionName: !Ref StoryWorkflowFunction
+      Definition:
+        StartAt: ProcessStoryStep
+        States:
+          ProcessStoryStep:
+            Type: Task
+            Resource: !GetAtt StoryWorkflowFunction.Arn
+            ResultPath: $
+            Retry:
+              - ErrorEquals:
+                  - Lambda.ServiceException
+                  - Lambda.AWSLambdaException
+                  - Lambda.SdkClientException
+                IntervalSeconds: 2
+                MaxAttempts: 3
+                BackoffRate: 2.0
+            Next: CheckStatus
+          CheckStatus:
+            Type: Choice
+            Choices:
+              - Variable: $.status
+                StringEquals: completed
+                Next: WorkflowSucceeded
+              - Variable: $.status
+                StringEquals: failed
+                Next: WorkflowFailed
+            Default: WaitAndContinue
+          WaitAndContinue:
+            Type: Wait
+            Seconds: 10
+            Next: ProcessStoryStep
+          WorkflowSucceeded:
+            Type: Succeed
+          WorkflowFailed:
+            Type: Fail
+            Cause: Story generation failed
 
 Outputs:
   AdventureApiUrl:
     Description: Public Function URL for the backend API.
     Value: !GetAtt AdventureApiFunctionUrl.FunctionUrl
-  StoryJobQueueUrl:
-    Description: Queue URL for story jobs.
-    Value: !Ref StoryJobQueue
+  StoryWorkflowArn:
+    Description: Step Functions workflow ARN for story generation.
+    Value: !Ref StoryWorkflowStateMachine

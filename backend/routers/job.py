@@ -4,6 +4,7 @@ from sqlalchemy.orm import Session
 
 from core.config import settings
 from db.database import get_db
+from models.generation import StoryGenerationRun
 from models.job import StoryJob
 from schemas.job import StoryJobResponse
 
@@ -23,14 +24,15 @@ def _mark_stale_job_if_needed(db: Session, job: StoryJob) -> StoryJob:
     if job.status != "processing":
         return job
 
-    created_at = job.created_at
-    if created_at is None:
+    run = db.query(StoryGenerationRun).filter(StoryGenerationRun.job_id == job.job_id).first()
+    heartbeat_at = run.updated_at if run is not None else job.created_at
+    if heartbeat_at is None:
         return job
 
-    if created_at.tzinfo is None:
-        created_at = created_at.replace(tzinfo=timezone.utc)
+    if heartbeat_at.tzinfo is None:
+        heartbeat_at = heartbeat_at.replace(tzinfo=timezone.utc)
 
-    age_seconds = (datetime.now(timezone.utc) - created_at).total_seconds()
+    age_seconds = (datetime.now(timezone.utc) - heartbeat_at).total_seconds()
     if age_seconds <= settings.STALE_JOB_TIMEOUT_SECONDS:
         return job
 

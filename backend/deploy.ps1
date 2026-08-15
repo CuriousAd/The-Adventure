@@ -9,7 +9,7 @@ param(
     [string]$DatabaseUrl,
 
     [Parameter(Mandatory = $true)]
-    [string]$GeminiApiKey,
+    [string]$GeminiApiKeys,
 
     [string]$AllowedOrigins = "",
     [string]$ApiPrefix = "/api",
@@ -27,7 +27,7 @@ $samDeployArgs = @(
     "--region", $Region,
     "--capabilities", "CAPABILITY_IAM",
     "--parameter-overrides",
-    "GeminiApiKey=$GeminiApiKey",
+    "GeminiApiKeys=$GeminiApiKeys",
     "DatabaseUrl=$DatabaseUrl",
     "AllowedOrigins=$AllowedOrigins",
     "ApiPrefix=$ApiPrefix",

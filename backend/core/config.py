@@ -11,14 +11,23 @@ class Settings(BaseSettings):
 
     ALLOWED_ORIGINS: str = ""
 
+    GEMINI_API_KEYS: Optional[str] = None
     GEMINI_API_KEY: Optional[str] = None
     GOOGLE_API_KEY: Optional[str] = None
     GEMINI_MODEL: str = "gemini-3.1-flash-lite"
     JOB_EXECUTION_MODE: str = "background"
     STORY_GENERATION_RETRIES: int = 2
+    STORY_TASK_MAX_ATTEMPTS: int = 3
+    STORY_REPAIR_RETRIES: int = 1
     STALE_JOB_TIMEOUT_SECONDS: int = 900
-    STORY_JOB_QUEUE_URL: Optional[str] = None
+    DEFAULT_STORY_DEPTH: int = 8
+    MAX_STORY_DEPTH: int = 8
+    MIN_ENDING_DEPTH: int = 4
+    DEFAULT_BRANCHING_FACTOR: int = 2
+    LAZY_INITIAL_DEPTH: int = 2
+    LAZY_PREFETCH_ENABLED: bool = True
     AWS_REGION: Optional[str] = None
+    STORY_WORKFLOW_ARN: Optional[str] = None
 
     def __init__(self, **values):
         super().__init__(**values)
@@ -46,8 +55,8 @@ class Settings(BaseSettings):
                 )
             self.DATABASE_URL = f"postgresql://{db_user}:{db_password}@{db_host}:{db_port}/{db_name}"
 
-        if not self.gemini_api_key:
-            raise ValueError("Set GOOGLE_API_KEY or GEMINI_API_KEY for story generation.")
+        if not self.gemini_api_keys:
+            raise ValueError("Set GEMINI_API_KEYS, GOOGLE_API_KEY, or GEMINI_API_KEY for story generation.")
 
     @field_validator("DEBUG", mode="before")
     @classmethod
@@ -69,9 +78,23 @@ class Settings(BaseSettings):
         return self.GOOGLE_API_KEY or self.GEMINI_API_KEY
 
     @property
+    def gemini_api_keys(self) -> List[str]:
+        configured_keys = [
+            key.strip()
+            for key in (self.GEMINI_API_KEYS or "").split(",")
+            if key.strip()
+        ]
+        fallback_keys = [
+            key
+            for key in [self.GOOGLE_API_KEY, self.GEMINI_API_KEY]
+            if key
+        ]
+        return configured_keys or fallback_keys
+
+    @property
     def job_execution_mode(self) -> str:
         if self.JOB_EXECUTION_MODE == "background" and os.getenv("AWS_LAMBDA_FUNCTION_NAME"):
-            return "queue" if self.STORY_JOB_QUEUE_URL else "background"
+            return "workflow" if self.STORY_WORKFLOW_ARN else "background"
         return self.JOB_EXECUTION_MODE
 
     class Config:
