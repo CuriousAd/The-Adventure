@@ -56,7 +56,7 @@ function StoryLoader() {
 
     if (story) {
         return <div className="story-loader">
-            <StoryGame story={story} onNewStory={createNewStory} />
+            <StoryGame key={story.id} story={story} onNewStory={createNewStory} />
         </div>
     }
 }

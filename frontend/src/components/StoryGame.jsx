@@ -1,34 +1,15 @@
-import {useState, useEffect} from 'react';
+import {useState} from 'react';
 
 function StoryGame({story, onNewStory}) {
     const [currentNodeId, setCurrentNodeId] = useState(null);
-    const [currentNode, setCurrentNode] = useState(null)
-    const [options, setOptions] = useState([])
-    const [isEnding, setIsEnding] = useState(false)
-    const [isWinningEnding, setIsWinningEnding] = useState(false)
-
-    useEffect(() => {
-        if (story && story.root_node) {
-            const rootNodeId = story.root_node.id
-            setCurrentNodeId(rootNodeId)
-        }
-    }, [story])
-
-    useEffect(() => {
-        if (currentNodeId && story && story.all_nodes) {
-            const node = story.all_nodes[currentNodeId]
-
-            setCurrentNode(node)
-            setIsEnding(node.is_ending)
-            setIsWinningEnding(node.is_winning_endig)
-
-            if (!node.is_ending && node.options && node.options.length > 0) {
-                setOptions(node.options)
-            } else {
-                setOptions([])
-            }
-        }
-    }, [currentNodeId, story])
+    const rootNodeId = story?.root_node?.id ?? null
+    const selectedNodeId = currentNodeId ?? rootNodeId
+    const currentNode = selectedNodeId && story?.all_nodes
+        ? story.all_nodes[selectedNodeId]
+        : story?.root_node
+    const options = currentNode?.options ?? []
+    const isEnding = Boolean(currentNode?.is_ending)
+    const isWinningEnding = Boolean(currentNode?.is_winning_ending)
 
 
     const chooseOption = (optionId) => {
